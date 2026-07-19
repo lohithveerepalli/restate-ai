@@ -38,10 +38,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const configured = isSupabaseConfigured();
+  const [configured, setConfigured] = useState(false);
 
   const setStoreProfile = useStudioStore((s) => s.setProfile);
   const setAuthenticated = useStudioStore((s) => s.setAuthenticated);
+
+  useEffect(() => {
+    setConfigured(isSupabaseConfigured());
+  }, []);
 
   const loadProfile = useCallback(async (userId: string) => {
     const supabase = createClient();

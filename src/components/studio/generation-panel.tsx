@@ -28,6 +28,11 @@ import {
 } from "@/lib/geo";
 import { DEFAULT_CAMERA } from "@/types";
 import { getShareUrl } from "@/lib/share";
+import {
+  canGenerateLocally,
+  consumeLocalGeneration,
+  getLocalQuota,
+} from "@/lib/local-quota";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -63,10 +68,14 @@ export function GenerationPanel({ className }: { className?: string }) {
 
   const { refreshProfile } = useAuth();
   const [copied, setCopied] = useState(false);
+  const [localRemaining, setLocalRemaining] = useState(
+    () => getLocalQuota().remaining
+  );
 
-  const remaining =
-    (profile?.free_generations_remaining ?? 3) +
-    (profile?.credit_balance ?? 0);
+  const remaining = isAuthenticated
+    ? (profile?.free_generations_remaining ?? 3) +
+      (profile?.credit_balance ?? 0)
+    : localRemaining;
 
   const drawPreset = (acres: number) => {
     const center = centroid ?? {
@@ -140,18 +149,18 @@ export function GenerationPanel({ className }: { className?: string }) {
       return;
     }
 
-    if (isAuthenticated && profile && remaining <= 0) {
+    if (isAuthenticated) {
+      if (profile && remaining <= 0) {
+        setShowLimitModal(true);
+        return;
+      }
+    } else if (!canGenerateLocally()) {
       setShowLimitModal(true);
       return;
     }
 
-    if (!isAuthenticated) {
-      // Allow demo generation without login
-      toast.message("Running demo generation (sign in for full AI + history)");
-    }
-
     setGenerating(true);
-    setGenerationProgress(5, "Submitting to AI…");
+    setGenerationProgress(5, "Sending prompt to Meshy AI…");
 
     try {
       const res = await fetch("/api/generate", {
@@ -163,7 +172,8 @@ export function GenerationPanel({ className }: { className?: string }) {
           centroid,
           areaAcres,
           locationName: locationLabel,
-          demo: !isAuthenticated,
+          // Real Meshy whenever server has MESHY_API_KEY
+          demo: false,
         }),
       });
       const data = await res.json();
@@ -183,19 +193,30 @@ export function GenerationPanel({ className }: { className?: string }) {
       };
 
       if (data.status === "generating" && data.meshyTaskId) {
-        setGenerationProgress(15, "Meshy is sculpting your development…");
+        setGenerationProgress(
+          15,
+          data.meshy
+            ? "Meshy is sculpting your development (1–3 min)…"
+            : "Building model…"
+        );
         const done = await pollStatus(data.meshyTaskId, data.generationId);
         modelUrlResult = done.modelUrl;
       }
 
       if (!modelUrlResult) throw new Error("No model returned");
 
+      // Consume local free gen only after success
+      if (!isAuthenticated) {
+        const q = consumeLocalGeneration();
+        setLocalRemaining(q.remaining);
+      }
+
       setGenerationProgress(100, "Placing on terrain…");
       setModelTransform(transform);
       setModelUrl(modelUrlResult);
       setActiveGeneration({
         id: data.generationId ?? `local-${Date.now()}`,
-        user_id: profile?.id ?? "demo",
+        user_id: profile?.id ?? "guest",
         prompt: prompt.trim(),
         share_id: data.shareId,
         polygon,
@@ -213,7 +234,11 @@ export function GenerationPanel({ className }: { className?: string }) {
       });
 
       await refreshProfile();
-      toast.success("Development placed on the map");
+      toast.success(
+        data.meshy || data.demo === false
+          ? "AI development placed on the map"
+          : "Development placed (demo model)"
+      );
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : "Generation failed");
@@ -254,9 +279,10 @@ export function GenerationPanel({ className }: { className?: string }) {
           <div>
             <p className="text-sm font-semibold text-white">AI Development</p>
             <p className="text-[11px] text-white/50">
-              {isAuthenticated
-                ? `${remaining} generation${remaining === 1 ? "" : "s"} left`
-                : "Demo mode · sign in for full AI"}
+              {remaining} free generation{remaining === 1 ? "" : "s"} left
+              {!isAuthenticated ? " · guest" : ""}
+              {" · "}
+              Meshy AI live
             </p>
           </div>
         </div>

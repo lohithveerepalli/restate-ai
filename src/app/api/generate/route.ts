@@ -9,7 +9,7 @@ import { generateShareId } from "@/lib/share";
 import { estimateModelScale } from "@/lib/geo";
 import type { PolygonPoint } from "@/types";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 interface GenerateBody {
   prompt: string;
@@ -17,6 +17,7 @@ interface GenerateBody {
   centroid: { lat: number; lng: number };
   areaAcres: number;
   locationName?: string;
+  /** Force demo model only when client explicitly requests it */
   demo?: boolean;
 }
 
@@ -43,7 +44,11 @@ export async function POST(req: NextRequest) {
 
     const supabase = await createClient();
     let userId: string | null = null;
-    let useDemo = demo || !isMeshyConfigured() || process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
+    // Prefer real Meshy whenever configured; only force demo if key missing or DEMO_MODE
+    const forceDemoEnv = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+    let useDemo =
+      Boolean(demo) || forceDemoEnv || !isMeshyConfigured();
 
     if (supabase) {
       const {
@@ -52,7 +57,6 @@ export async function POST(req: NextRequest) {
       userId = user?.id ?? null;
 
       if (userId) {
-        // Consume a free generation or credit
         const service = createServiceClient();
         if (service) {
           const { data: consume, error: consumeError } = await service.rpc(
@@ -76,15 +80,53 @@ export async function POST(req: NextRequest) {
               );
             }
           }
+        } else {
+          // Soft-consume free generations via anon client
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select(
+              "free_generations_remaining, credit_balance, generation_count"
+            )
+            .eq("id", userId)
+            .maybeSingle();
+
+          if (profile) {
+            const free = profile.free_generations_remaining ?? 0;
+            const credits = profile.credit_balance ?? 0;
+            if (free <= 0 && credits <= 0) {
+              return NextResponse.json(
+                {
+                  error: "Generation limit reached",
+                  code: "LIMIT_REACHED",
+                  free_remaining: 0,
+                  credits: 0,
+                },
+                { status: 402 }
+              );
+            }
+            if (free > 0) {
+              await supabase
+                .from("profiles")
+                .update({
+                  free_generations_remaining: free - 1,
+                  generation_count: (profile.generation_count ?? 0) + 1,
+                })
+                .eq("id", userId);
+            } else {
+              await supabase
+                .from("profiles")
+                .update({
+                  credit_balance: credits - 1,
+                  generation_count: (profile.generation_count ?? 0) + 1,
+                })
+                .eq("id", userId);
+            }
+          }
         }
       }
     }
 
-    // Unauthenticated users can only use demo generation
-    if (!userId) {
-      useDemo = true;
-    }
-
+    // Guests may use real Meshy (quota enforced client-side); never block without auth
     const shareId = generateShareId();
     const scale = estimateModelScale(areaAcres);
     const modelTransform = {
@@ -146,6 +188,7 @@ export async function POST(req: NextRequest) {
       thumbnailUrl,
       modelTransform,
       demo: useDemo,
+      meshy: isMeshyConfigured() && !useDemo,
     });
   } catch (err) {
     console.error("Generate error", err);

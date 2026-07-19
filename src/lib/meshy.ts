@@ -42,7 +42,7 @@ export async function createTextTo3DTask(prompt: string): Promise<string> {
       should_remesh: true,
       topology: "triangle",
       target_polycount: 30000,
-      ai_model: "meshy-4",
+      ai_model: "meshy-6",
     }),
   });
 

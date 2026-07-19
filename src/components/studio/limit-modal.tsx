@@ -17,6 +17,7 @@ import { CREDIT_PLANS } from "@/types";
 import { Check, Play, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { grantLocalGeneration } from "@/lib/local-quota";
 
 const AD_SECONDS = 30;
 
@@ -51,20 +52,31 @@ export function LimitModal() {
     try {
       const res = await fetch("/api/credits/ad", { method: "POST" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not claim reward");
 
-      if (profile) {
-        setProfile({
-          ...profile,
-          free_generations_remaining:
-            data.free_remaining ?? profile.free_generations_remaining + 1,
-        });
+      if (res.ok && !data.demo) {
+        if (profile) {
+          setProfile({
+            ...profile,
+            free_generations_remaining:
+              data.free_remaining ?? profile.free_generations_remaining + 1,
+          });
+        }
+        await refreshProfile();
+      } else {
+        // Guest / no Supabase — local quota
+        grantLocalGeneration(1);
       }
-      await refreshProfile();
+
       toast.success("+1 generation unlocked");
       setOpen(false);
+      // soft reload quota UI
+      window.dispatchEvent(new Event("restate-quota"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Reward failed");
+      // Still grant local reward so demos never soft-lock
+      grantLocalGeneration(1);
+      toast.success("+1 generation unlocked");
+      setOpen(false);
+      console.error(err);
     } finally {
       setClaiming(false);
       setWatching(false);

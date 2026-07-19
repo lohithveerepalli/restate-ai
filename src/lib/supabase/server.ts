@@ -1,10 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { getSupabaseAnonKey } from "@/lib/supabase/config";
 
 export async function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = getSupabaseAnonKey();
 
   if (!url || !key) {
     return null;
@@ -23,17 +24,20 @@ export async function createClient() {
             cookieStore.set(name, value, options)
           );
         } catch {
-          // Called from a Server Component — middleware will refresh sessions.
+          // Server Component — middleware refreshes sessions
         }
       },
     },
   });
 }
 
-/** Service-role client for privileged server operations (never expose to browser). */
+/** Service-role / secret key for privileged server ops. */
 export function createServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    null;
 
   if (!url || !key) {
     return null;

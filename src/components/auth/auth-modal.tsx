@@ -13,9 +13,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useStudioStore } from "@/stores/studio-store";
 import { useAuth } from "@/components/providers/auth-provider";
-import { Loader2, Mail } from "lucide-react";
+import { Loader2, Mail, Sparkles, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { SupabaseSetupModal } from "@/components/setup/supabase-setup-modal";
 
 export function AuthModal() {
   const open = useStudioStore((s) => s.showAuthModal);
@@ -29,11 +31,16 @@ export function AuthModal() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
 
   const close = () => setShowAuthModal(false);
 
   const onEmail = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isSupabaseConfigured()) {
+      setSetupOpen(true);
+      return;
+    }
     setLoading(true);
     try {
       const err =
@@ -45,11 +52,11 @@ export function AuthModal() {
       } else {
         toast.success(
           mode === "login"
-            ? "Welcome back"
-            : "Check your email to confirm, or continue if confirmations are disabled"
+            ? "Welcome back — opening studio"
+            : "Account created — welcome to Restate"
         );
         close();
-        router.push("/studio");
+        router.push("/studio?tour=1");
       }
     } finally {
       setLoading(false);
@@ -57,155 +64,197 @@ export function AuthModal() {
   };
 
   const onOAuth = async (provider: "google" | "apple") => {
+    if (!isSupabaseConfigured()) {
+      toast.message("Connect Supabase first", {
+        description: "Paste your Project URL to enable Google sign-in.",
+      });
+      setSetupOpen(true);
+      return;
+    }
     setLoading(true);
     try {
       const err = await signInWithOAuth(provider);
-      if (err) toast.error(err);
+      if (err) {
+        toast.error(err, {
+          description:
+            provider === "google"
+              ? "Enable Google under Auth → Providers in Supabase, and add your OAuth Client ID."
+              : undefined,
+        });
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const exploreAsGuest = () => {
+    close();
+    router.push("/studio?tour=1&guest=1");
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(v) => setShowAuthModal(v)}>
-      <DialogContent className="max-w-md border-white/10 bg-zinc-950 text-white sm:rounded-2xl">
-        <DialogHeader>
-          <DialogTitle className="text-xl">
-            {mode === "login" ? "Welcome back" : "Create your account"}
-          </DialogTitle>
-          <DialogDescription className="text-white/60">
-            {mode === "login"
-              ? "Sign in to generate, save history, and share developments."
-              : "Get 3 free AI generations. Google, Apple, or email."}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={(v) => setShowAuthModal(v)}>
+        <DialogContent className="max-w-md border-white/10 bg-zinc-950 text-white sm:rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl">
+              {mode === "login" ? "Welcome back" : "Start building on real land"}
+            </DialogTitle>
+            <DialogDescription className="text-white/60">
+              {mode === "login"
+                ? "Sign in to generate with Meshy, save history, and share."
+                : "3 free AI generations. Sign up with Google, then open the Land Development Studio."}
+            </DialogDescription>
+          </DialogHeader>
 
-        {!configured && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
-            Supabase is not configured. Add{" "}
-            <code className="text-amber-50">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
-            <code className="text-amber-50">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>{" "}
-            to <code className="text-amber-50">.env.local</code>. You can still
-            explore the studio in demo mode.
+          {!configured && (
+            <button
+              type="button"
+              onClick={() => setSetupOpen(true)}
+              className="flex w-full items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-left text-xs text-amber-100 transition hover:bg-amber-500/15"
+            >
+              <Settings2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                <strong className="text-amber-50">One step left for Google auth:</strong>{" "}
+                paste your Supabase Project URL (publishable key is already set).
+                Click here to connect.
+              </span>
+            </button>
+          )}
+
+          <div className="grid gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-12 bg-white text-base text-zinc-900 hover:bg-white/90"
+              disabled={loading}
+              onClick={() => onOAuth("google")}
+            >
+              {loading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <GoogleIcon />
+              )}
+              Continue with Google
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-11 bg-white/10 text-white hover:bg-white/20"
+              disabled={loading}
+              onClick={() => onOAuth("apple")}
+            >
+              <AppleIcon />
+              Continue with Apple
+            </Button>
           </div>
-        )}
 
-        <div className="grid gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-11 bg-white text-zinc-900 hover:bg-white/90"
-            disabled={loading || !configured}
-            onClick={() => onOAuth("google")}
-          >
-            <GoogleIcon />
-            Continue with Google
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-11 bg-white/10 text-white hover:bg-white/20"
-            disabled={loading || !configured}
-            onClick={() => onOAuth("apple")}
-          >
-            <AppleIcon />
-            Continue with Apple
-          </Button>
-        </div>
+          <div className="relative flex items-center gap-3 py-1">
+            <div className="h-px flex-1 bg-white/10" />
+            <span className="text-[11px] uppercase tracking-wider text-white/40">
+              or email
+            </span>
+            <div className="h-px flex-1 bg-white/10" />
+          </div>
 
-        <div className="relative flex items-center gap-3 py-1">
-          <div className="h-px flex-1 bg-white/10" />
-          <span className="text-[11px] uppercase tracking-wider text-white/40">
-            email
-          </span>
-          <div className="h-px flex-1 bg-white/10" />
-        </div>
-
-        <form onSubmit={onEmail} className="space-y-3">
-          {mode === "signup" && (
+          <form onSubmit={onEmail} className="space-y-3">
+            {mode === "signup" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="name" className="text-white/70">
+                  Full name
+                </Label>
+                <Input
+                  id="name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="border-white/10 bg-white/5 text-white"
+                  placeholder="Ada Lovelace"
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
-              <Label htmlFor="name" className="text-white/70">
-                Full name
+              <Label htmlFor="email" className="text-white/70">
+                Email
               </Label>
               <Input
-                id="name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                id="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="border-white/10 bg-white/5 text-white"
-                placeholder="Ada Lovelace"
+                placeholder="you@company.com"
               />
             </div>
-          )}
-          <div className="space-y-1.5">
-            <Label htmlFor="email" className="text-white/70">
-              Email
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="border-white/10 bg-white/5 text-white"
-              placeholder="you@company.com"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="password" className="text-white/70">
-              Password
-            </Label>
-            <Input
-              id="password"
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="border-white/10 bg-white/5 text-white"
-              placeholder="••••••••"
-            />
-          </div>
-          <Button
-            type="submit"
-            className="h-11 w-full gap-2 bg-gradient-to-r from-sky-500 to-violet-500"
-            disabled={loading || !configured}
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Mail className="h-4 w-4" />
-            )}
-            {mode === "login" ? "Sign in" : "Create account"}
-          </Button>
-        </form>
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-white/70">
+                Password
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="border-white/10 bg-white/5 text-white"
+                placeholder="••••••••"
+              />
+            </div>
+            <Button
+              type="submit"
+              className="h-11 w-full gap-2 bg-gradient-to-r from-sky-500 to-violet-500"
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Mail className="h-4 w-4" />
+              )}
+              {mode === "login" ? "Sign in with email" : "Create account"}
+            </Button>
+          </form>
 
-        <p className="text-center text-xs text-white/50">
-          {mode === "login" ? (
-            <>
-              New here?{" "}
-              <button
-                type="button"
-                className="text-sky-400 hover:underline"
-                onClick={() => setShowAuthModal(true, "signup")}
-              >
-                Create an account
-              </button>
-            </>
-          ) : (
-            <>
-              Already have an account?{" "}
-              <button
-                type="button"
-                className="text-sky-400 hover:underline"
-                onClick={() => setShowAuthModal(true, "login")}
-              >
-                Sign in
-              </button>
-            </>
-          )}
-        </p>
-      </DialogContent>
-    </Dialog>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-10 w-full gap-2 text-white/70 hover:bg-white/5 hover:text-white"
+            onClick={exploreAsGuest}
+          >
+            <Sparkles className="h-4 w-4 text-sky-400" />
+            Skip for now — explore studio (3 free gens)
+          </Button>
+
+          <p className="text-center text-xs text-white/50">
+            {mode === "login" ? (
+              <>
+                New here?{" "}
+                <button
+                  type="button"
+                  className="text-sky-400 hover:underline"
+                  onClick={() => setShowAuthModal(true, "signup")}
+                >
+                  Create an account
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{" "}
+                <button
+                  type="button"
+                  className="text-sky-400 hover:underline"
+                  onClick={() => setShowAuthModal(true, "login")}
+                >
+                  Sign in
+                </button>
+              </>
+            )}
+          </p>
+        </DialogContent>
+      </Dialog>
+
+      <SupabaseSetupModal open={setupOpen} onOpenChange={setSetupOpen} />
+    </>
   );
 }
 

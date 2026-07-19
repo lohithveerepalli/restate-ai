@@ -69,11 +69,19 @@ export default function CesiumViewer() {
 
       const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
+      // Google key must be set before Viewer + tileset (Photorealistic 3D Tiles)
+      if (apiKey && Cesium.GoogleMaps) {
+        Cesium.GoogleMaps.defaultApiKey = apiKey;
+      }
+
       const viewer = new Cesium.Viewer(containerRef.current, {
         animation: false,
         timeline: false,
         baseLayerPicker: false,
-        geocoder: false,
+        // Required for Google Photorealistic 3D Tiles policy
+        geocoder: apiKey
+          ? Cesium.IonGeocodeProviderType.GOOGLE
+          : false,
         homeButton: false,
         sceneModePicker: false,
         navigationHelpButton: false,
@@ -83,7 +91,22 @@ export default function CesiumViewer() {
         creditContainer: document.createElement("div"),
         terrain: undefined,
         baseLayer: false,
+        // Hide Cesium ion default geocoder widget chrome; we use our own search
       });
+
+      // Hide geocoder UI if present (we use custom SearchBar)
+      try {
+        const geocoderEl = (
+          viewer as unknown as { _toolbar?: HTMLElement }
+        )._toolbar;
+        void geocoderEl;
+        const container = containerRef.current.querySelector(
+          ".cesium-viewer-geocoderContainer"
+        );
+        if (container instanceof HTMLElement) container.style.display = "none";
+      } catch {
+        /* ignore */
+      }
 
       viewer.scene.globe.show = true;
       viewer.scene.globe.depthTestAgainstTerrain = true;
@@ -100,14 +123,13 @@ export default function CesiumViewer() {
       viewer.shadowMap.size = 2048;
       viewer.scene.globe.shadows = Cesium.ShadowMode.RECEIVE_ONLY;
 
-      // Imagery fallback so the globe is never blank without tiles key
+      // Imagery fallback so the globe is never blank without 3D tiles
       try {
         viewer.imageryLayers.removeAll();
         viewer.imageryLayers.addImageryProvider(
           await Cesium.IonImageryProvider.fromAssetId(2)
         );
       } catch {
-        // Ion may not be configured — openstreetmap fallback
         try {
           viewer.imageryLayers.addImageryProvider(
             new Cesium.UrlTemplateImageryProvider({
@@ -121,20 +143,27 @@ export default function CesiumViewer() {
       }
 
       // Google Photorealistic 3D Tiles
-      // https://cesium.com/learn/cesiumjs/ref-doc/global.html#createGooglePhotorealistic3DTileset
+      // Requires Map Tiles API enabled: https://console.cloud.google.com/apis/library/tile.googleapis.com
       if (apiKey) {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const C = Cesium as any;
-          if (C.GoogleMaps) {
-            C.GoogleMaps.defaultApiKey = apiKey;
-          }
-          const tileset = await Cesium.createGooglePhotorealistic3DTileset();
+          const tileset = await Cesium.createGooglePhotorealistic3DTileset(
+            {
+              key: apiKey,
+              onlyUsingWithGoogleGeocoder: true,
+            },
+            {
+              showCreditsOnScreen: false,
+            }
+          );
           viewer.scene.primitives.add(tileset);
           tilesetRef.current = tileset;
           viewer.scene.globe.show = false;
+          console.info("[Restate] Google Photorealistic 3D Tiles loaded");
         } catch (e) {
-          console.warn("3D Tiles unavailable, using globe imagery", e);
+          console.warn(
+            "[Restate] 3D Tiles unavailable — enable Map Tiles API + billing on this Google key. Using globe imagery.",
+            e
+          );
           viewer.scene.globe.show = true;
         }
       }
