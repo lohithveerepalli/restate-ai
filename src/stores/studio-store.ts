@@ -9,16 +9,16 @@ import type {
   Generation,
   Profile,
   CameraPreset,
+  BasemapStyle,
 } from "@/types";
 import { calculateAreaAcres, calculateCentroid } from "@/lib/geo";
+import { DEFAULT_CAMERA } from "@/types";
 
 interface StudioState {
-  // Auth / profile
   profile: Profile | null;
   isAuthenticated: boolean;
   isDemoMode: boolean;
 
-  // Map interaction
   mode: StudioMode;
   polygon: PolygonPoint[];
   isPolygonClosed: boolean;
@@ -26,8 +26,9 @@ interface StudioState {
   centroid: { lat: number; lng: number } | null;
   measurePoints: PolygonPoint[];
   measureDistanceM: number;
+  /** Live camera look-at center for acre presets */
+  cameraCenter: { lat: number; lng: number; height: number };
 
-  // Generation
   prompt: string;
   isGenerating: boolean;
   generationProgress: number;
@@ -36,10 +37,12 @@ interface StudioState {
   generations: Generation[];
   modelTransform: ModelTransform;
   modelUrl: string | null;
+  /** Auto-run generate after surprise prep */
+  pendingAutoGenerate: boolean;
 
-  // Visualization
-  timeOfDay: number; // 0–24 hours
+  timeOfDay: number;
   layers: LayerToggles;
+  basemap: BasemapStyle;
   showTour: boolean;
   tourStep: number;
   showLimitModal: boolean;
@@ -49,13 +52,13 @@ interface StudioState {
   locationLabel: string;
   mapReady: boolean;
 
-  // Actions
   setProfile: (profile: Profile | null) => void;
   setAuthenticated: (v: boolean) => void;
   setDemoMode: (v: boolean) => void;
   setMode: (mode: StudioMode) => void;
   setPolygon: (points: PolygonPoint[], closed?: boolean) => void;
   addPolygonPoint: (point: PolygonPoint) => void;
+  undoPolygonPoint: () => void;
   closePolygon: () => void;
   clearPolygon: () => void;
   setPrompt: (prompt: string) => void;
@@ -65,8 +68,10 @@ interface StudioState {
   setGenerations: (g: Generation[]) => void;
   setModelTransform: (t: Partial<ModelTransform>) => void;
   setModelUrl: (url: string | null) => void;
+  setPendingAutoGenerate: (v: boolean) => void;
   setTimeOfDay: (h: number) => void;
   setLayers: (partial: Partial<LayerToggles>) => void;
+  setBasemap: (b: BasemapStyle) => void;
   setShowTour: (v: boolean) => void;
   setTourStep: (n: number) => void;
   setShowLimitModal: (v: boolean) => void;
@@ -74,15 +79,32 @@ interface StudioState {
   setShowAuthModal: (v: boolean, mode?: "login" | "signup") => void;
   setLocationLabel: (label: string) => void;
   setMapReady: (v: boolean) => void;
+  setCameraCenter: (c: { lat: number; lng: number; height: number }) => void;
   setMeasurePoints: (pts: PolygonPoint[]) => void;
   addMeasurePoint: (pt: PolygonPoint) => void;
   clearMeasure: () => void;
   applyCameraPreset: (preset: CameraPreset) => void;
   pendingCameraPreset: CameraPreset | null;
   clearCameraPreset: () => void;
-  flyToRequest: { lng: number; lat: number; height?: number } | null;
-  requestFlyTo: (lng: number, lat: number, height?: number) => void;
+  flyToRequest: {
+    lng: number;
+    lat: number;
+    height?: number;
+    heading?: number;
+    pitch?: number;
+  } | null;
+  requestFlyTo: (
+    lng: number,
+    lat: number,
+    height?: number,
+    opts?: { heading?: number; pitch?: number }
+  ) => void;
   clearFlyTo: () => void;
+  navAction: "zoom-in" | "zoom-out" | "home" | "north" | "selection" | null;
+  requestNav: (
+    a: "zoom-in" | "zoom-out" | "home" | "north" | "selection"
+  ) => void;
+  clearNav: () => void;
 }
 
 const defaultLayers: LayerToggles = {
@@ -91,6 +113,7 @@ const defaultLayers: LayerToggles = {
   wireframe: false,
   terrainDetails: true,
   polygon: true,
+  labels: true,
 };
 
 export const useStudioStore = create<StudioState>((set, get) => ({
@@ -105,6 +128,11 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   centroid: null,
   measurePoints: [],
   measureDistanceM: 0,
+  cameraCenter: {
+    lat: DEFAULT_CAMERA.latitude,
+    lng: DEFAULT_CAMERA.longitude,
+    height: DEFAULT_CAMERA.height,
+  },
 
   prompt: "",
   isGenerating: false,
@@ -114,9 +142,11 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   generations: [],
   modelTransform: { scale: 1, heading: 0, heightOffset: 0 },
   modelUrl: null,
+  pendingAutoGenerate: false,
 
   timeOfDay: 14,
   layers: defaultLayers,
+  basemap: "hybrid",
   showTour: false,
   tourStep: 0,
   showLimitModal: false,
@@ -127,6 +157,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   mapReady: false,
   pendingCameraPreset: null,
   flyToRequest: null,
+  navAction: null,
 
   setProfile: (profile) => set({ profile }),
   setAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
@@ -134,7 +165,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   setMode: (mode) => set({ mode }),
 
   setPolygon: (points, closed = false) => {
-    const areaAcres = closed || points.length >= 3 ? calculateAreaAcres(points) : 0;
+    const areaAcres =
+      closed || points.length >= 3 ? calculateAreaAcres(points) : 0;
     const centroid =
       closed || points.length >= 3 ? calculateCentroid(points) : null;
     set({
@@ -149,6 +181,21 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     const { polygon, isPolygonClosed } = get();
     if (isPolygonClosed) return;
     const next = [...polygon, point];
+    set({
+      polygon: next,
+      areaAcres: next.length >= 3 ? calculateAreaAcres(next) : 0,
+      centroid: next.length >= 3 ? calculateCentroid(next) : null,
+    });
+  },
+
+  undoPolygonPoint: () => {
+    const { polygon, isPolygonClosed } = get();
+    if (isPolygonClosed) {
+      set({ isPolygonClosed: false });
+      return;
+    }
+    if (polygon.length === 0) return;
+    const next = polygon.slice(0, -1);
     set({
       polygon: next,
       areaAcres: next.length >= 3 ? calculateAreaAcres(next) : 0,
@@ -187,9 +234,11 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   setModelTransform: (partial) =>
     set((s) => ({ modelTransform: { ...s.modelTransform, ...partial } })),
   setModelUrl: (modelUrl) => set({ modelUrl }),
+  setPendingAutoGenerate: (pendingAutoGenerate) => set({ pendingAutoGenerate }),
   setTimeOfDay: (timeOfDay) => set({ timeOfDay }),
   setLayers: (partial) =>
     set((s) => ({ layers: { ...s.layers, ...partial } })),
+  setBasemap: (basemap) => set({ basemap }),
   setShowTour: (showTour) => set({ showTour }),
   setTourStep: (tourStep) => set({ tourStep }),
   setShowLimitModal: (showLimitModal) => set({ showLimitModal }),
@@ -201,22 +250,33 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     }),
   setLocationLabel: (locationLabel) => set({ locationLabel }),
   setMapReady: (mapReady) => set({ mapReady }),
+  setCameraCenter: (cameraCenter) => set({ cameraCenter }),
 
   setMeasurePoints: (measurePoints) => set({ measurePoints }),
   addMeasurePoint: (pt) => {
-    const next = [...get().measurePoints, pt];
-    let measureDistanceM = 0;
-    if (next.length >= 2) {
-      // lazy import avoided — compute simply with haversine via dynamic later in component
-      measureDistanceM = get().measureDistanceM;
+    const current = get().measurePoints;
+    if (current.length >= 2) {
+      set({ measurePoints: [pt], measureDistanceM: 0 });
+      return;
     }
-    set({ measurePoints: next, measureDistanceM });
+    const next = [...current, pt];
+    set({ measurePoints: next });
   },
   clearMeasure: () => set({ measurePoints: [], measureDistanceM: 0 }),
 
   applyCameraPreset: (pendingCameraPreset) => set({ pendingCameraPreset }),
   clearCameraPreset: () => set({ pendingCameraPreset: null }),
-  requestFlyTo: (lng, lat, height) =>
-    set({ flyToRequest: { lng, lat, height } }),
+  requestFlyTo: (lng, lat, height, opts) =>
+    set({
+      flyToRequest: {
+        lng,
+        lat,
+        height,
+        heading: opts?.heading,
+        pitch: opts?.pitch,
+      },
+    }),
   clearFlyTo: () => set({ flyToRequest: null }),
+  requestNav: (navAction) => set({ navAction }),
+  clearNav: () => set({ navAction: null }),
 }));

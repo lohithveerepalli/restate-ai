@@ -70,11 +70,7 @@ export interface MeshyTask {
   task_error?: { message?: string };
 }
 
-export type StudioMode =
-  | "navigate"
-  | "draw"
-  | "measure"
-  | "edit-model";
+export type StudioMode = "navigate" | "draw" | "measure" | "edit-model";
 
 export type CameraPreset =
   | "birds-eye"
@@ -82,12 +78,16 @@ export type CameraPreset =
   | "golden-hour"
   | "dramatic-sunset";
 
+/** Map basemap styles with city/road labels for navigation */
+export type BasemapStyle = "streets" | "satellite" | "hybrid";
+
 export interface LayerToggles {
   model: boolean;
   shadows: boolean;
   wireframe: boolean;
   terrainDetails: boolean;
   polygon: boolean;
+  labels: boolean;
 }
 
 export const PROMPT_EXAMPLES = [
@@ -146,7 +146,19 @@ export const SURPRISE_PROMPTS = [
 
 export const ACRE_PRESETS = [5, 10, 25, 50] as const;
 
-/** Texas Hill Country near Fredericksburg — scenic open land, strong 3D tile coverage */
+/** Quick-jump cities for navigation when map labels are hard to read */
+export const CITY_PRESETS = [
+  { name: "Austin, TX", lat: 30.2672, lng: -97.7431, height: 8000 },
+  { name: "Hill Country", lat: 30.2752, lng: -98.8719, height: 2500 },
+  { name: "Dallas", lat: 32.7767, lng: -96.797, height: 12000 },
+  { name: "SF Bay", lat: 37.7749, lng: -122.4194, height: 15000 },
+  { name: "NYC", lat: 40.7128, lng: -74.006, height: 12000 },
+  { name: "Miami", lat: 25.7617, lng: -80.1918, height: 10000 },
+  { name: "Denver", lat: 39.7392, lng: -104.9903, height: 14000 },
+  { name: "Phoenix", lat: 33.4484, lng: -112.074, height: 12000 },
+] as const;
+
+/** Texas Hill Country near Fredericksburg */
 export const DEFAULT_CAMERA = {
   longitude: -98.8719,
   latitude: 30.2752,

@@ -8,9 +8,14 @@ export const metadata = {
 export default async function StudioPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tour?: string }>;
+  searchParams: Promise<{ tour?: string; guest?: string; surprise?: string }>;
 }) {
   const params = await searchParams;
   const startTour = params.tour === "1" || params.tour === "true";
-  return <StudioShell startTour={startTour} />;
+  const autoSurprise =
+    params.surprise === "1" || params.surprise === "true";
+
+  return (
+    <StudioShell startTour={startTour && !autoSurprise} autoSurprise={autoSurprise} />
+  );
 }

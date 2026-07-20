@@ -41,7 +41,7 @@ export function SearchBar({ className }: { className?: string }) {
       } finally {
         setLoading(false);
       }
-    }, 350);
+    }, 320);
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
@@ -50,20 +50,20 @@ export function SearchBar({ className }: { className?: string }) {
   const select = (r: Result) => {
     setQuery(r.name.split(",")[0] ?? r.name);
     setLocationLabel(r.name.split(",").slice(0, 2).join(","));
-    requestFlyTo(r.lng, r.lat, 2000);
+    requestFlyTo(r.lng, r.lat, 3500, { heading: 15, pitch: -50 });
     setOpen(false);
   };
 
   return (
-    <div className={cn("relative w-full max-w-md", className)}>
+    <div className={cn("relative w-full", className)}>
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/50" />
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => results.length > 0 && setOpen(true)}
-          placeholder="Search any place on Earth…"
-          className="h-11 border-white/10 bg-black/50 pl-10 pr-10 text-white placeholder:text-white/40 backdrop-blur-xl focus-visible:ring-sky-400/50"
+          placeholder="Search cities, addresses, landmarks…"
+          className="h-11 border-white/10 bg-black/55 pl-10 pr-10 text-white shadow-lg placeholder:text-white/40 backdrop-blur-xl focus-visible:ring-sky-400/50"
         />
         {loading ? (
           <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-white/50" />

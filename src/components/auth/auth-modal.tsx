@@ -75,12 +75,22 @@ export function AuthModal() {
     try {
       const err = await signInWithOAuth(provider);
       if (err) {
-        toast.error(err, {
-          description:
-            provider === "google"
-              ? "Enable Google under Auth → Providers in Supabase, and add your OAuth Client ID."
-              : undefined,
-        });
+        const disabled =
+          /not enabled|unsupported provider|provider is not enabled/i.test(err);
+        toast.error(
+          disabled
+            ? "Google sign-in is not enabled yet in Supabase"
+            : err,
+          {
+            description: disabled
+              ? "Dashboard → Authentication → Providers → Google → Enable, then add Google OAuth Client ID & Secret."
+              : provider === "google"
+                ? "Check Supabase Auth → Providers → Google and redirect URLs."
+                : undefined,
+            duration: 8000,
+          }
+        );
+        if (disabled) setSetupOpen(true);
       }
     } finally {
       setLoading(false);

@@ -56,11 +56,16 @@ export function SupabaseSetupModal({ open, onOpenChange, onConfigured }: Props) 
             Connect Supabase (Google sign-in)
           </DialogTitle>
           <DialogDescription className="text-white/60">
-            Your publishable key is already installed. Paste the{" "}
-            <strong className="text-white/80">Project URL</strong> from your
-            Supabase dashboard to enable Google / email auth.
+            Project URL is set. Google sign-in fails until you{" "}
+            <strong className="text-white/80">enable the Google provider</strong>{" "}
+            in Supabase and add a Google OAuth Client (not the Maps API key).
           </DialogDescription>
         </DialogHeader>
+
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-50">
+          Error you saw: <code>Unsupported provider: provider is not enabled</code>
+          — Google is still <strong>OFF</strong> in Auth → Providers.
+        </div>
 
         <ol className="space-y-2 text-sm text-white/70">
           <li className="flex gap-2">
@@ -68,50 +73,74 @@ export function SupabaseSetupModal({ open, onOpenChange, onConfigured }: Props) 
             <span>
               Open{" "}
               <a
-                href="https://supabase.com/dashboard/projects"
+                href="https://supabase.com/dashboard/project/zdnehrokhevyffbaixyv/auth/providers"
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 text-sky-400 hover:underline"
               >
-                Supabase projects <ExternalLink className="h-3 w-3" />
+                Auth → Providers <ExternalLink className="h-3 w-3" />
               </a>
-              , select your project (or create one).
+              → <strong className="text-white/90">Google</strong> → toggle{" "}
+              <strong className="text-white/90">Enable</strong>.
             </span>
           </li>
           <li className="flex gap-2">
             <span className="text-sky-400">2.</span>
             <span>
-              <strong className="text-white/90">Settings → API</strong> → copy{" "}
-              <em>Project URL</em> (https://….supabase.co).
+              Google Cloud →{" "}
+              <a
+                href="https://console.cloud.google.com/apis/credentials"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-sky-400 hover:underline"
+              >
+                Credentials <ExternalLink className="h-3 w-3" />
+              </a>
+              → Create credentials → <strong className="text-white/90">OAuth client ID</strong> →
+              type <strong className="text-white/90">Web application</strong>.
             </span>
           </li>
           <li className="flex gap-2">
             <span className="text-sky-400">3.</span>
             <span>
-              SQL Editor → paste & run{" "}
-              <code className="rounded bg-white/10 px-1">supabase/schema.sql</code>{" "}
-              from this repo.
+              Authorized redirect URI (exact):{" "}
+              <code className="block rounded bg-white/10 px-1.5 py-1 text-[11px] text-sky-100">
+                https://zdnehrokhevyffbaixyv.supabase.co/auth/v1/callback
+              </code>
             </span>
           </li>
           <li className="flex gap-2">
             <span className="text-sky-400">4.</span>
             <span>
-              <strong className="text-white/90">Auth → Providers → Google</strong>{" "}
-              → enable, add Google OAuth Client ID & Secret. Redirect URL:{" "}
-              <code className="rounded bg-white/10 px-1 text-[10px]">
-                https://YOUR_REF.supabase.co/auth/v1/callback
-              </code>
+              Copy Client ID + Client Secret into Supabase Google provider →{" "}
+              <strong className="text-white/90">Save</strong>.
             </span>
           </li>
           <li className="flex gap-2">
             <span className="text-sky-400">5.</span>
             <span>
-              Auth → URL config → Site URL{" "}
+              <a
+                href="https://supabase.com/dashboard/project/zdnehrokhevyffbaixyv/auth/url-configuration"
+                target="_blank"
+                rel="noreferrer"
+                className="text-sky-400 hover:underline"
+              >
+                URL configuration
+              </a>
+              : Site URL{" "}
               <code className="rounded bg-white/10 px-1">http://localhost:3000</code>
               , Redirect{" "}
               <code className="rounded bg-white/10 px-1 text-[10px]">
                 http://localhost:3000/auth/callback
               </code>
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-sky-400">6.</span>
+            <span>
+              SQL Editor → run{" "}
+              <code className="rounded bg-white/10 px-1">supabase/schema.sql</code>{" "}
+              if you have not already.
             </span>
           </li>
         </ol>

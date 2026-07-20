@@ -1,48 +1,39 @@
-# Full user journey — Landing → Google → Studio
+# Full user journey — Landing → Auth → Studio
 
-## Keys currently wired (local `.env.local`)
+## Intended path
 
-| Service | Status | Purpose |
-|---------|--------|---------|
-| **Google Maps** | ✅ Set | Photorealistic 3D Tiles |
-| **Meshy** | ✅ Set + tested (`meshy-6`) | Real text-to-3D |
-| **Supabase publishable key** | ✅ Set | Auth + DB client |
-| **Supabase Project URL** | ⚠️ **Still needed from you** | Enables Google/email OAuth |
+1. **Landing** — http://localhost:3000  
+2. **Sign up with Google** (after Supabase Google provider enabled) **or** email **or** Open studio as guest  
+3. **Studio** — tour (optional) → select land → Generate / Surprise  
+4. **Interact** — lighting, camera, model transform, share  
 
-Without the Project URL, users can still:
-1. Open the studio as guest  
-2. Run the guided tour  
-3. Select land  
-4. Generate with **real Meshy AI** (3 free local gens)  
-5. Adjust lighting / model  
+## Guest path (works without Google OAuth)
 
-## Ideal path (after you paste Project URL)
+1. **Open studio now** or `/studio?guest=1`  
+2. Use **Hybrid/Streets** basemap + search/city chips to navigate  
+3. **Quick parcel** or **Draw** land  
+4. Prompt chip or **Surprise** → Meshy generation (3 free local gens)  
 
-1. **Landing** http://localhost:3000  
-2. Click **Sign up with Google**  
-3. (First time) Connect Supabase URL if prompted → enable Google provider in dashboard  
-4. Google OAuth → `/auth/callback` → `/studio?tour=1`  
-5. Guided tour → pick acres → chip prompt → **Generate with AI**  
-6. Wait for Meshy (1–3 min) → model on terrain  
+## Surprise path
 
-## One-time Supabase checklist
+http://localhost:3000/studio?surprise=1  
 
-1. Dashboard → your project → **Settings → API**  
-2. Copy **Project URL** → paste in the in-app setup modal (or `.env.local` as `NEXT_PUBLIC_SUPABASE_URL`)  
-3. SQL Editor → run `supabase/schema.sql`  
-4. **Auth → Providers → Google** → ON  
-   - Create OAuth Client in Google Cloud (type: Web)  
-   - Authorized redirect: `https://<project-ref>.supabase.co/auth/v1/callback`  
-5. **Auth → URL configuration**  
-   - Site URL: `http://localhost:3000`  
-   - Redirect: `http://localhost:3000/auth/callback`  
+Auto-selects nearby land + random prompt and starts Meshy.
 
-## Google Maps note
+## Supabase project used in development
 
-Enable **Map Tiles API** (not only Geocoding) on the same key for Cesium Photorealistic 3D Tiles:
+- Project ref: `zdnehrokhevyffbaixyv`  
+- URL: `https://zdnehrokhevyffbaixyv.supabase.co`  
 
-https://console.cloud.google.com/apis/library/tile.googleapis.com
+### Required dashboard steps
 
-## Security
+1. SQL → run `supabase/schema.sql`  
+2. Auth → URL config: Site `http://localhost:3000`, redirect `http://localhost:3000/auth/callback`  
+3. Auth → Providers → **Google** enable + OAuth Client ID/Secret  
+   - Redirect URI: `https://zdnehrokhevyffbaixyv.supabase.co/auth/v1/callback`  
 
-API keys were shared in chat — rotate Meshy + Google + Supabase keys after demos if this chat is shared.
+Error `Unsupported provider: provider is not enabled` means Google is still OFF in Supabase.
+
+## Keys
+
+Store only in `.env.local` (gitignored). Rotate if shared outside a secure channel.

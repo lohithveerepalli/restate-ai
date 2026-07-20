@@ -5,7 +5,6 @@ import {
   Sun,
   Sunset,
   Mountain,
-  Ruler,
   Box,
   Layers,
   CloudSun,
@@ -16,7 +15,6 @@ import { Switch } from "@/components/ui/switch";
 import { useStudioStore } from "@/stores/studio-store";
 import type { CameraPreset } from "@/types";
 import { cn } from "@/lib/utils";
-import { formatDistance } from "@/lib/geo";
 
 function hourLabel(h: number) {
   const hr = Math.floor(h) % 24;
@@ -28,11 +26,7 @@ function hourLabel(h: number) {
 
 const PRESETS: { id: CameraPreset; label: string; icon: React.ReactNode }[] = [
   { id: "birds-eye", label: "Bird's eye", icon: <Eye className="h-3.5 w-3.5" /> },
-  {
-    id: "ground",
-    label: "Ground",
-    icon: <Mountain className="h-3.5 w-3.5" />,
-  },
+  { id: "ground", label: "Ground", icon: <Mountain className="h-3.5 w-3.5" /> },
   {
     id: "golden-hour",
     label: "Golden hour",
@@ -51,10 +45,6 @@ export function ViewControls({ className }: { className?: string }) {
   const layers = useStudioStore((s) => s.layers);
   const setLayers = useStudioStore((s) => s.setLayers);
   const applyCameraPreset = useStudioStore((s) => s.applyCameraPreset);
-  const mode = useStudioStore((s) => s.mode);
-  const setMode = useStudioStore((s) => s.setMode);
-  const measureDistanceM = useStudioStore((s) => s.measureDistanceM);
-  const clearMeasure = useStudioStore((s) => s.clearMeasure);
   const modelUrl = useStudioStore((s) => s.modelUrl);
   const modelTransform = useStudioStore((s) => s.modelTransform);
   const setModelTransform = useStudioStore((s) => s.setModelTransform);
@@ -62,11 +52,11 @@ export function ViewControls({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "flex w-full max-w-xs flex-col gap-3 rounded-2xl border border-white/10 bg-black/55 p-3 shadow-2xl backdrop-blur-xl",
+        "flex w-full max-w-xs flex-col gap-3 rounded-2xl border border-white/10 bg-black/65 p-3 shadow-2xl backdrop-blur-xl",
         className
       )}
     >
-      <p className="text-[11px] font-medium uppercase tracking-wider text-white/45">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
         View & light
       </p>
 
@@ -91,7 +81,9 @@ export function ViewControls({ className }: { className?: string }) {
             <Sun className="h-3.5 w-3.5 text-amber-300" />
             Time of day
           </span>
-          <span className="tabular-nums text-white/90">{hourLabel(timeOfDay)}</span>
+          <span className="tabular-nums text-white/90">
+            {hourLabel(timeOfDay)}
+          </span>
         </div>
         <Slider
           value={[timeOfDay]}
@@ -116,6 +108,7 @@ export function ViewControls({ className }: { className?: string }) {
             ["shadows", "Shadows", CloudSun],
             ["wireframe", "Wireframe", Layers],
             ["polygon", "Selection", Mountain],
+            ["labels", "Place labels", Layers],
           ] as const
         ).map(([key, label, Icon]) => (
           <label
@@ -134,96 +127,59 @@ export function ViewControls({ className }: { className?: string }) {
         ))}
       </div>
 
-      <div className="border-t border-white/10 pt-2">
-        <Button
-          size="sm"
-          variant="secondary"
-          className={cn(
-            "h-8 w-full gap-1.5 text-xs",
-            mode === "measure"
-              ? "bg-amber-500/30 text-amber-100 hover:bg-amber-500/40"
-              : "bg-white/10 text-white hover:bg-white/20"
-          )}
-          onClick={() => {
-            if (mode === "measure") {
-              clearMeasure();
-              setMode("navigate");
-            } else {
-              clearMeasure();
-              setMode("measure");
-            }
-          }}
-        >
-          <Ruler className="h-3.5 w-3.5" />
-          {mode === "measure"
-            ? measureDistanceM > 0
-              ? formatDistance(measureDistanceM)
-              : "Click two points…"
-            : "Measure distance"}
-        </Button>
-      </div>
-
       {modelUrl && (
         <div className="space-y-2 border-t border-white/10 pt-2">
           <p className="text-[11px] font-medium uppercase tracking-wider text-white/45">
             Model transform
           </p>
-          <div className="space-y-1">
-            <div className="flex justify-between text-[11px] text-white/60">
-              <span>Scale</span>
-              <span className="tabular-nums">
-                {modelTransform.scale.toFixed(2)}×
-              </span>
+          {(
+            [
+              {
+                label: "Scale",
+                key: "scale" as const,
+                min: 0.05,
+                max: Math.max(20, modelTransform.scale * 2),
+                step: 0.05,
+                fmt: (n: number) => `${n.toFixed(2)}×`,
+              },
+              {
+                label: "Rotation",
+                key: "heading" as const,
+                min: 0,
+                max: 360,
+                step: 1,
+                fmt: (n: number) => `${Math.round(n)}°`,
+              },
+              {
+                label: "Height",
+                key: "heightOffset" as const,
+                min: -50,
+                max: 200,
+                step: 0.5,
+                fmt: (n: number) => `${n.toFixed(1)} m`,
+              },
+            ] as const
+          ).map((row) => (
+            <div key={row.key} className="space-y-1">
+              <div className="flex justify-between text-[11px] text-white/60">
+                <span>{row.label}</span>
+                <span className="tabular-nums">
+                  {row.fmt(modelTransform[row.key])}
+                </span>
+              </div>
+              <Slider
+                value={[modelTransform[row.key]]}
+                min={row.min}
+                max={row.max}
+                step={row.step}
+                onValueChange={(v) => {
+                  const n = Array.isArray(v) ? v[0] : v;
+                  if (typeof n === "number")
+                    setModelTransform({ [row.key]: n });
+                }}
+              />
             </div>
-            <Slider
-              value={[modelTransform.scale]}
-              min={0.05}
-              max={Math.max(20, modelTransform.scale * 2)}
-              step={0.05}
-              onValueChange={(v) => {
-                const n = Array.isArray(v) ? v[0] : v;
-                setModelTransform({ scale: typeof n === "number" ? n : 1 });
-              }}
-            />
-          </div>
-          <div className="space-y-1">
-            <div className="flex justify-between text-[11px] text-white/60">
-              <span>Rotation</span>
-              <span className="tabular-nums">
-                {Math.round(modelTransform.heading)}°
-              </span>
-            </div>
-            <Slider
-              value={[modelTransform.heading]}
-              min={0}
-              max={360}
-              step={1}
-              onValueChange={(v) => {
-                const n = Array.isArray(v) ? v[0] : v;
-                setModelTransform({ heading: typeof n === "number" ? n : 0 });
-              }}
-            />
-          </div>
-          <div className="space-y-1">
-            <div className="flex justify-between text-[11px] text-white/60">
-              <span>Height offset</span>
-              <span className="tabular-nums">
-                {modelTransform.heightOffset.toFixed(1)} m
-              </span>
-            </div>
-            <Slider
-              value={[modelTransform.heightOffset]}
-              min={-50}
-              max={200}
-              step={0.5}
-              onValueChange={(v) => {
-                const n = Array.isArray(v) ? v[0] : v;
-                setModelTransform({
-                  heightOffset: typeof n === "number" ? n : 0,
-                });
-              }}
-            />
-          </div>
+          ))}
         </div>
       )}
     </div>
